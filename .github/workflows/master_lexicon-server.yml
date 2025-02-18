@@ -30,7 +30,7 @@ jobs:
       
       - name: Run tests if available
         run: npm run test --if-present
-        continue-on-error: true # Continue deployment even if tests fail
+        continue-on-error: true # Continue deployment even if tests fail 
       
       - name: Prepare and zip artifact for deployment
         run: |
@@ -128,3 +128,5 @@ jobs:
               "nodeVersion": "~18"
             }
           slot-name: 'Production'
+
+#some comments
