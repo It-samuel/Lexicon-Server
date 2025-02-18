@@ -3,9 +3,29 @@ import jsonServer from "json-server";
 import auth from "json-server-auth";
 import cors from "cors";
 import path from "path";
+import promClient from "prom-client";
+
+
 
 const server = express();
 const port = process.env.PORT || 8080;
+
+// Initialize Prometheus metrics
+const register = new promClient.Registry();
+
+// Create a custom metric for request count
+promClient.collectDefaultMetrics({
+    register,
+    timeout: 10000, // Collect metrics every 10 seconds
+});
+
+// Custom metrics for the API
+const httpRequestTotal = new promClient.Counter({
+    name: 'http_request_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code'],
+    buckets: [0.1, 0.3, 0.5, 1, 3, 5, 7, 10], // Custom buckets for response time
+})
 
 // Enable CORS for all routes
 const allowedOrigins = [
