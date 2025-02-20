@@ -20,12 +20,77 @@ promClient.collectDefaultMetrics({
 });
 
 // Custom metrics for the API
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
+});
+
 const httpRequestTotal = new promClient.Counter({
-    name: 'http_request_total',
-    help: 'Total number of HTTP requests',
-    labelNames: ['method', 'route', 'status_code'],
-    buckets: [0.1, 0.3, 0.5, 1, 3, 5, 7, 10], // Custom buckets for response time
-})
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code']
+});
+
+const activeConnections = new promClient.Gauge({
+  name: 'http_active_connections',
+  help: 'Number of active HTTP connections'
+});
+
+const authAttempts = new promClient.Counter({
+  name: 'auth_attempts_total',
+  help: 'Total authentication attempts',
+  labelNames: ['status'] // success, failure
+});
+
+// Register the metrics
+register.registerMetric(httpRequestTotal);
+register.registerMetric(activeConnections);
+register.registerMetric(authAttempts);
+register.registerMetric(httpRequestDuration);
+
+// Middleware to track request duration and total requests
+const metricsMiddleware = (req, res, next) => {
+  // Skip metrics collection for the /metrics endpoint itself
+  if (req.path === '/metrics') {
+    return next();
+  }
+
+  const start = Date.now();
+  activeConnections.inc();
+  
+  // Track when response finishes
+  const originalSend = res.send;
+  res.send = function(data) {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    
+    // Record metrics
+    httpRequestDuration
+      .labels(req.method, route, res.statusCode)
+      .observe(duration);
+    
+    httpRequestTotal
+      .labels(req.method, route, res.statusCode)
+      .inc();
+    
+    activeConnections.dec();
+    
+    // Track auth attempts
+    if (req.path.includes('/auth') || req.path.includes('/login') || req.path.includes('/register')) {
+      if (res.statusCode === 200 || res.statusCode === 201) {
+        authAttempts.labels('success').inc();
+      } else if (res.statusCode === 401 || res.statusCode === 403) {
+        authAttempts.labels('failure').inc();
+      }
+    }
+    
+    originalSend.call(this, data);
+  };
+  
+  next();
+};
 
 // Enable CORS for all routes
 const allowedOrigins = [
