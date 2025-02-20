@@ -92,6 +92,31 @@ const metricsMiddleware = (req, res, next) => {
   next();
 };
 
+// Use the metrics middleware
+server.use(metricsMiddleware);
+
+// Serve Prometheus metrics at /metrics endpoint
+server.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    const metrics = await register.metrics();
+    res.end(metrics);
+  } catch (error) {
+    res.status(500).end(error.toString());
+  }
+});
+
+// Health check endpoint
+server.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'json-server-backend'
+  });
+});
+
+
 // Enable CORS for all routes
 const allowedOrigins = [
     'https://lexicon-agc5hjdncqbvhzh7.canadacentral-01.azurewebsites.net', // Frontend hosted on Azure
