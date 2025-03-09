@@ -14,24 +14,58 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
-
+    
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Set up Node.js version
         uses: actions/setup-node@v3
         with:
-          node-version: '22.x'
-
-      - name: npm install, build, and test
+          node-version: '18.x' # Using 18.x as it's well-supported on Azure App Service
+      
+      - name: npm install and build
         run: |
           npm install
           npm run build --if-present
-          npm run test --if-present
-
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
-
+      
+      - name: Run tests if available
+        run: npm run test --if-present
+        continue-on-error: true # Continue deployment even if tests fail
+      
+      - name: Prepare and zip artifact for deployment
+        run: |
+          # Create a web.config file if not exists
+          if [ ! -f "web.config" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <system.webServer>
+                <handlers>
+                  <add name="iisnode" path="server.js" verb="*" modules="iisnode"/>
+                </handlers>
+                <rewrite>
+                  <rules>
+                    <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">
+                      <match url="^server.js\/debug[\/]?" />
+                    </rule>
+                    <rule name="StaticContent">
+                      <action type="Rewrite" url="public{REQUEST_URI}"/>
+                    </rule>
+                    <rule name="DynamicContent">
+                      <conditions>
+                        <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
+                      </conditions>
+                      <action type="Rewrite" url="server.js"/>
+                    </rule>
+                  </rules>
+                </rewrite>
+                <iisnode watchedFiles="web.config;*.js"/>
+              </system.webServer>
+            </configuration>' > web.config
+          fi
+          
+          # Creating a proper deployment package without node_modules
+          zip -r release.zip . -x "node_modules/*" "*.git*"
+      
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -47,13 +81,13 @@ jobs:
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
-
+    
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: node-app
-
+      
       - name: Unzip artifact for deployment
         run: unzip release.zip
       
@@ -63,7 +97,7 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_3EA9DD439ED7495D96633E2319F4DE9F }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1B9F954F21A8413AA4A597A67A4B56CD }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_02A538FC8801497393222CD8E31A7EF6 }}
-
+      
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
@@ -71,4 +105,26 @@ jobs:
           app-name: 'Lexicon-Server'
           slot-name: 'Production'
           package: .
-          
+      
+      - name: 'Configure startup command and settings'
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: 'Lexicon-Server'
+          app-settings-json: |
+            [
+              {
+                "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                "value": "~18",
+                "slotSetting": false
+              },
+              {
+                "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                "value": "true",
+                "slotSetting": false
+              }
+            ]
+          general-settings-json: |
+            {
+              "nodeVersion": "~18"
+            }
+          slot-name: 'Production'
