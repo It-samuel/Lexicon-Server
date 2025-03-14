@@ -24,6 +24,6 @@ const rules = auth.rewriter({
 server.use(rules)
 server.use(auth)
 server.use(middlewares)
-server.use(router)
+
 
 server.listen(8080);
