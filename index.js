@@ -13,7 +13,7 @@ server.use((req, res, next) => {
 });
 
 const router = jsonServer.router('./data/db.json');
-server.use('/api', router);
+server.use( router);
 server.db = router.db;
 
 const middlewares = jsonServer.defaults();
