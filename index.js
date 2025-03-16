@@ -1,21 +1,41 @@
 import express from "express";
 import jsonServer from "json-server";
 import auth from "json-server-auth";
+import cors from "cors"; // Import the cors package
 
 const server = express();
 const port = process.env.PORT || 8080;
 
-server.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    next();
-});
+// Enable CORS for all routes
+const allowedOrigins = [
+    'https://lexicon-agc5hjdncqbvhzh7.canadacentral-01.azurewebsites.net', // Frontend hosted on Azure
+    'http://localhost:8080', // Local development
+];
 
+server.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = `The CORS policy for this site does not allow access from the specified origin: ${origin}`;
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow credentials (e.g., cookies, authorization headers)
+}));
+
+// Handle preflight requests
+server.options('*', cors());
+
+// API routes
 const router = jsonServer.router('./data/db.json');
-server.use( router);
+server.use(router);
 server.db = router.db;
 
+// Auth and middleware
 const middlewares = jsonServer.defaults();
 const rules = auth.rewriter({
     products: 444,
@@ -27,6 +47,14 @@ const rules = auth.rewriter({
 server.use(rules);
 server.use(auth);
 server.use(middlewares);
+
+// Serve static files from the React app (if applicable)
+server.use(express.static('build'));
+
+// Handle React routing, return all requests to React app (if applicable)
+server.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
 
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
