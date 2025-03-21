@@ -1,7 +1,8 @@
 import express from "express";
 import jsonServer from "json-server";
 import auth from "json-server-auth";
-import cors from "cors"; // Import the cors package
+import cors from "cors";
+import path from "path";
 
 const server = express();
 const port = process.env.PORT || 8080;
@@ -30,11 +31,6 @@ server.use(cors({
 // Handle preflight requests
 server.options('*', cors());
 
-// API routes
-const router = jsonServer.router('./data/db.json');
-server.use(router);
-server.db = router.db;
-
 // Auth and middleware
 const middlewares = jsonServer.defaults();
 const rules = auth.rewriter({
@@ -45,8 +41,13 @@ const rules = auth.rewriter({
 });
 
 server.use(rules);
-server.use(auth);
 server.use(middlewares);
+server.use(auth); // Apply auth middleware before the router
+
+// API routes
+const router = jsonServer.router('./data/db.json');
+server.use(router);
+server.db = router.db;
 
 // Serve static files from the React app (if applicable)
 server.use(express.static('build'));
@@ -59,4 +60,3 @@ server.get('*', (req, res) => {
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
-// End
