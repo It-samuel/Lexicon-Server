@@ -10,7 +10,7 @@ const port = process.env.PORT || 8080;
 // Enable CORS for all routes
 const allowedOrigins = [
     'https://lexicon-agc5hjdncqbvhzh7.canadacentral-01.azurewebsites.net', // Frontend hosted on Azure
-    'http://localhost:8080', // Local development
+    'http://localhost:3001', // Local development
 ];
 
 server.use(cors({
